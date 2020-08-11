@@ -2,6 +2,19 @@ const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 const helmet = require("helmet");
+const { nanoid } = require("nanoid");
+const yup = require("yup");
+const monk = require("monk");
+
+require("dotenv").config();
+
+const db = monk(process.env.MONGOLAB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
+const urls = db.get("urls");
+urls.createIndex("name");
+urls.createIndex({ slug: 1 }, { unique: true });
 
 const app = express();
 
@@ -15,13 +28,70 @@ app.use(express.static("./public"));
 //   //todo:get a short url by id
 // });
 
-// app.get("/:id", (req, res) => {
-//   //todo:redirect to the url
-// });
+app.get("/:id", async (req, res, next) => {
+  const { id: slug } = req.params;
+  try {
+    const url = await urls.findOne({ slug });
+    if (url) {
+      res.redirect(url.url);
+    }
+    res.redirect(`/error=${slug} not found`);
+  } catch (error) {
+    res.redirect(`/error=Link not found`);
+  }
 
-// app.post("/url", (req, res) => {
-//   //todo:create a short url
-// });
+  //todo:redirect to the url
+});
+const schema = yup.object().shape({
+  slug: yup
+    .string()
+    .trim()
+    .matches(/^[\w\-]+$/i),
+  url: yup.string().url().required(),
+});
+
+app.post("/url", async (req, res, next) => {
+  let { slug, url } = req.body;
+  try {
+    await schema.validate({
+      slug,
+      url,
+    });
+
+    if (url.includes("cdg.sh")) {
+      throw new Error("Stop it. 🛑");
+    }
+    if (!slug) {
+      slug = nanoid(5);
+    } else {
+      const existing = await urls.findOne({ slug });
+      if (existing) {
+        throw new Error("Slug in use. 🍔");
+      }
+    }
+    slug = slug.toLowerCase();
+    const newUrl = {
+      url,
+      slug,
+    };
+    const created = await urls.insert(newUrl);
+    res.json(created);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.use((error, req, res, next) => {
+  if (error.status) {
+    res.status(error.status);
+  } else {
+    res.status(500);
+  }
+  res.json({
+    message: error.message,
+    stack: process.env.NODE_ENV === "production" ? "🥞" : error.stack,
+  });
+});
 
 const port = process.env.PORT || 1337;
 app.listen(port, () => {
