@@ -1,84 +1,94 @@
+const path = require("path");
 const express = require("express");
 const morgan = require("morgan");
-const cors = require("cors");
 const helmet = require("helmet");
-const { nanoid } = require("nanoid");
 const yup = require("yup");
 const monk = require("monk");
+const rateLimit = require("express-rate-limit");
+const slowDown = require("express-slow-down");
+const { nanoid } = require("nanoid");
 
 require("dotenv").config();
 
-const db = monk(process.env.MONGOLAB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
+const db = monk(process.env.MONGOLAB_URI);
 const urls = db.get("urls");
-urls.createIndex("name");
 urls.createIndex({ slug: 1 }, { unique: true });
 
 const app = express();
+app.enable("trust proxy");
 
 app.use(helmet());
-app.use(morgan("tiny"));
-app.use(cors());
+app.use(morgan("common"));
 app.use(express.json());
 app.use(express.static("./public"));
 
-// app.post("/url/:id", (req, res) => {
-//   //todo:get a short url by id
-// });
+const notFoundPath = path.join(__dirname, "public/404.html");
 
 app.get("/:id", async (req, res, next) => {
   const { id: slug } = req.params;
   try {
     const url = await urls.findOne({ slug });
     if (url) {
-      res.redirect(url.url);
+      return res.redirect(url.url);
     }
-    res.redirect(`/error=${slug} not found`);
+    return res.status(404).sendFile(notFoundPath);
   } catch (error) {
-    res.redirect(`/error=Link not found`);
+    return res.status(404).sendFile(notFoundPath);
   }
-
-  //todo:redirect to the url
 });
+
 const schema = yup.object().shape({
   slug: yup
     .string()
     .trim()
     .matches(/^[\w\-]+$/i),
-  url: yup.string().url().required(),
+  url: yup.string().trim().url().required(),
 });
 
-app.post("/url", async (req, res, next) => {
-  let { slug, url } = req.body;
-  try {
-    await schema.validate({
-      slug,
-      url,
-    });
-
-    if (url.includes("cdg.sh")) {
-      throw new Error("Stop it. 🛑");
-    }
-    if (!slug) {
-      slug = nanoid(5);
-    } else {
-      const existing = await urls.findOne({ slug });
-      if (existing) {
-        throw new Error("Slug in use. 🍔");
+app.post(
+  "/url",
+  slowDown({
+    windowMs: 30 * 1000,
+    delayAfter: 1,
+    delayMs: 500,
+  }),
+  rateLimit({
+    windowMs: 30 * 1000,
+    max: 1,
+  }),
+  async (req, res, next) => {
+    let { slug, url } = req.body;
+    try {
+      await schema.validate({
+        slug,
+        url,
+      });
+      if (url.includes("naughty.sh")) {
+        throw new Error("Stop it. 🛑");
       }
+      if (!slug) {
+        slug = nanoid(5);
+      } else {
+        const existing = await urls.findOne({ slug });
+        if (existing) {
+          throw new Error("Slug in use. 🍔");
+        }
+      }
+      slug = slug.toLowerCase();
+      const newUrl = {
+        url,
+        slug,
+      };
+      const created = await urls.insert(newUrl);
+      res.json(created);
+    } catch (error) {
+      next(error);
     }
-    slug = slug.toLowerCase();
-    const newUrl = {
-      url,
-      slug,
-    };
-    const created = await urls.insert(newUrl);
-    res.json(created);
-  } catch (error) {
-    next(error);
   }
+);
+
+app.use((req, res, next) => {
+  res.status(404).sendFile(notFoundPath);
 });
 
 app.use((error, req, res, next) => {
