@@ -11,12 +11,6 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("./public"));
 
-app.get("/", (req, res) => {
-  res.json({
-    message: "naughty.sh - Short Urls for you ",
-  });
-});
-
 // app.post("/url/:id", (req, res) => {
 //   //todo:get a short url by id
 // });
