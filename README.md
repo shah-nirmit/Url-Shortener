@@ -1,10 +1,10 @@
 # Installation
 
-1.Make sure you have node.js installed 
-2.`git clone https://github.com/naughtyboy191/Todo-App` 
-3.``` npm install``` 
-4.1 For development:= ```npm start```
-4.2 For production:=```npm run dev```
+1.Make sure you have node.js installed <br>
+2.`git clone https://github.com/naughtyboy191/Todo-App`<br> 
+3.``` npm install``` <br>
+4.1 For development:= ```npm start```<br>
+4.2 For production:=```npm run dev```<br>
 
 If PORT not specific specified the application will run on **1337**
 
