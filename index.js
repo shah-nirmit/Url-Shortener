@@ -1,3 +1,4 @@
+//import required packages
 const path = require("path");
 const express = require("express");
 const morgan = require("morgan");
@@ -8,35 +9,47 @@ const rateLimit = require("express-rate-limit");
 const slowDown = require("express-slow-down");
 const { nanoid } = require("nanoid");
 
+//use dotenv for local env variables
 require("dotenv").config();
 
+//connect to db and get the 'urls' database and create a index for slug to be unique
 const db = monk(process.env.MONGOLAB_URI);
 const urls = db.get("urls");
 urls.createIndex({ slug: 1 }, { unique: true });
 
+//initialise express app
 const app = express();
 app.enable("trust proxy");
 
+//use helmet for securing the http requests by suppling various HTTP-Headers   and morgan for logging the requests easy to debug
 app.use(helmet());
 app.use(morgan("common"));
+
+//to recognise the incoming response as a json request
 app.use(express.json());
+
+// serve the static files present in directory specified
 app.use(express.static("./public"));
 
+// set the path for 404 file
 const notFoundPath = path.join(__dirname, "public/404.html");
 
+//get request to redirect to specified website according to slug
 app.get("/:id", async (req, res, next) => {
-  const { id: slug } = req.params;
+  const { id: slug } = req.params; //get the values from json request object
   try {
-    const url = await urls.findOne({ slug });
+    const url = await urls.findOne({ slug }); //find the object matching the specified slug
     if (url) {
       return res.redirect(url.url);
     }
+    //if not found return 404 status and respective html page
     return res.status(404).sendFile(notFoundPath);
   } catch (error) {
     return res.status(404).sendFile(notFoundPath);
   }
 });
 
+//define the table schema
 const schema = yup.object().shape({
   slug: yup
     .string()
@@ -45,9 +58,11 @@ const schema = yup.object().shape({
   url: yup.string().trim().url().required(),
 });
 
+//post req to store the slug to database
 app.post(
   "/url",
   slowDown({
+    //slowdown the site response if multiple req made within 30s
     windowMs: 30 * 1000,
     delayAfter: 1,
     delayMs: 500,
@@ -60,6 +75,7 @@ app.post(
     let { slug, url } = req.body;
     try {
       await schema.validate({
+        //validate with table schemas
         slug,
         url,
       });
