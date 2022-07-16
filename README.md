@@ -15,4 +15,4 @@ If PORT not specific specified the application will run on **1337**
 1.implement functionality for slug to be active for a specific period of time (6 hours)
 2.implement user account creation and login system
 
-##Try to learn open source conventions
+## Try to learn open source conventions
