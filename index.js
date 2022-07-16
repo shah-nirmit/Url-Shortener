@@ -103,6 +103,9 @@ app.post(
   }
 );
 
+app.get("/healthcheck", async (req, res, next) => {
+  res.json("A healthcheck")
+})
 app.use((req, res, next) => {
   res.status(404).sendFile(notFoundPath);
 });
